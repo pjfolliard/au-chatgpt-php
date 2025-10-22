@@ -8,6 +8,8 @@
     query: ''
   };
 
+  const attachments = [];
+
   function loadTree() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -96,10 +98,17 @@
     search: document.getElementById('searchInput'),
     results: document.getElementById('searchResults'),
     adminBtn: document.getElementById('adminBtn'),
+    settingsTrigger: document.getElementById('settingsTrigger'),
     modal: document.getElementById('settingsModal'),
     modalBackdrop: document.getElementById('modalBackdrop'),
     clearLocal: document.getElementById('btnClearLocal'),
-    closeModal: document.getElementById('btnCloseModal')
+    closeModal: document.getElementById('btnCloseModal'),
+    attachTrigger: document.getElementById('attachTrigger'),
+    attachMenu: document.getElementById('attachMenu'),
+    filePicker: document.getElementById('filePicker'),
+    chipTray: document.getElementById('attachmentChips'),
+    appShell: document.querySelector('.app'),
+    sidebarToggle: document.getElementById('sidebarToggle')
   };
 
   function uid(prefix) { return prefix + '-' + Math.random().toString(36).slice(2,8); }
@@ -305,10 +314,130 @@
     el.modal.classList.toggle('show', show);
     el.modalBackdrop.classList.toggle('show', show);
   }
-  el.adminBtn.addEventListener('click', () => toggleModal(true));
+  if (el.adminBtn) el.adminBtn.addEventListener('click', () => toggleModal(true));
+  if (el.settingsTrigger) el.settingsTrigger.addEventListener('click', () => toggleModal(true));
   el.modalBackdrop.addEventListener('click', () => toggleModal(false));
   el.closeModal.addEventListener('click', () => toggleModal(false));
   el.clearLocal.addEventListener('click', () => { localStorage.removeItem(STORAGE_KEY); location.reload(); });
+
+  function renderAttachments() {
+    const tray = el.chipTray;
+    if (!tray) return;
+    tray.innerHTML = '';
+    if (attachments.length === 0) {
+      tray.classList.remove('has-items');
+      tray.setAttribute('hidden', '');
+      return;
+    }
+    attachments.forEach((file) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip';
+      chip.setAttribute('data-id', file.id);
+      chip.setAttribute('aria-label', `Remove ${file.name}`);
+      const label = document.createElement('span');
+      label.className = 'chip-label';
+      label.textContent = file.name;
+      const close = document.createElement('span');
+      close.className = 'chip-close';
+      close.setAttribute('aria-hidden', 'true');
+      close.textContent = '✕';
+      chip.appendChild(label);
+      chip.appendChild(close);
+      chip.addEventListener('click', () => {
+        const idx = attachments.findIndex((item) => item.id === file.id);
+        if (idx !== -1) {
+          attachments.splice(idx, 1);
+          renderAttachments();
+        }
+      });
+      tray.appendChild(chip);
+    });
+    tray.classList.add('has-items');
+    tray.removeAttribute('hidden');
+  }
+
+  // Attachment launcher menu
+  if (el.attachTrigger && el.attachMenu) {
+    const trigger = el.attachTrigger;
+    const menu = el.attachMenu;
+    const fileInput = el.filePicker;
+
+    const setOpen = (open) => {
+      menu.classList.toggle('show', open);
+      menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+      trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const next = !menu.classList.contains('show');
+      setOpen(next);
+      if (next) {
+        const firstItem = menu.querySelector('.menu-item');
+        firstItem && firstItem.focus();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!menu.classList.contains('show')) return;
+      if (menu.contains(e.target) || trigger.contains(e.target)) return;
+      setOpen(false);
+    });
+
+    menu.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        trigger.focus();
+      }
+    });
+
+    menu.querySelectorAll('[data-accept]').forEach((btn) => {
+      btn.setAttribute('tabindex', '0');
+      btn.addEventListener('click', () => {
+        if (fileInput) {
+          fileInput.value = '';
+          fileInput.setAttribute('accept', btn.getAttribute('data-accept') || '');
+          fileInput.click();
+        }
+        setOpen(false);
+      });
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          btn.click();
+        }
+      });
+    });
+  }
+
+  if (el.filePicker) {
+    el.filePicker.addEventListener('change', (event) => {
+      const files = Array.from(event.target.files || []);
+      if (files.length === 0) return;
+      files.forEach((file) => {
+        attachments.push({ id: uid('file'), name: file.name });
+      });
+      event.target.value = '';
+      renderAttachments();
+    });
+  }
+
+  function updateSidebarToggle() {
+    if (!el.sidebarToggle || !el.appShell) return;
+    const collapsed = el.appShell.classList.contains('sidebar-collapsed');
+    el.sidebarToggle.textContent = collapsed ? '▶' : '◀';
+    el.sidebarToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    el.sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  }
+
+  if (el.sidebarToggle && el.appShell) {
+    el.sidebarToggle.addEventListener('click', () => {
+      el.appShell.classList.toggle('sidebar-collapsed');
+      updateSidebarToggle();
+    });
+    updateSidebarToggle();
+  }
 
   // Initial render
   render();
