@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/common.php';
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title><?php echo AU_APP_NAME; ?></title>
   <link rel="stylesheet" href="assets/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -66,7 +67,7 @@ require_once __DIR__ . '/includes/common.php';
         <div class="composer-main">
           <button id="attachTrigger" class="icon-button attach-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="attachMenu">＋</button>
           <div class="input-wrap">
-            <input id="chatInput" type="text" placeholder="Ask anything" aria-label="Chat input"/>
+            <textarea id="chatInput" placeholder="Ask anything" aria-label="Chat input" rows="1"></textarea>
           </div>
           <label class="toggle-field composer-toggle" for="searchWebToggle">
             <input id="searchWebToggle" type="checkbox" checked />
@@ -87,6 +88,7 @@ require_once __DIR__ . '/includes/common.php';
           <button type="button" class="menu-item" data-accept=".xls,.xlsx" role="menuitem">Upload Excel Spreadsheet</button>
           <button type="button" class="menu-item" data-accept=".csv" role="menuitem">Upload CSV</button>
           <button type="button" class="menu-item" data-accept=".pdf" role="menuitem">Upload PDF</button>
+          <button type="button" class="menu-item" data-accept=".md" role="menuitem">Upload Markdown</button>
         </div>
         <input type="file" id="filePicker" class="visually-hidden" />
       </footer>

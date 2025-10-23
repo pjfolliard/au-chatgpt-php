@@ -108,7 +108,9 @@
     filePicker: document.getElementById('filePicker'),
     chipTray: document.getElementById('attachmentChips'),
     appShell: document.querySelector('.app'),
-    sidebarToggle: document.getElementById('sidebarToggle')
+    sidebarToggle: document.getElementById('sidebarToggle'),
+    chatInput: document.getElementById('chatInput'),
+    conversation: document.querySelector('.conversation')
   };
 
   function uid(prefix) { return prefix + '-' + Math.random().toString(36).slice(2,8); }
@@ -121,6 +123,13 @@
     state.tree = next;
     saveTree();
     render();
+    
+    // If it's a new chat, focus on the input and prepare for auto-naming
+    if (kind === 'chat' && el.chatInput) {
+      el.chatInput.focus();
+      // Store the chat ID for auto-naming when first message is sent
+      state.currentChatId = child.id;
+    }
   }
 
   function render() {
@@ -416,11 +425,53 @@
       const files = Array.from(event.target.files || []);
       if (files.length === 0) return;
       files.forEach((file) => {
-        attachments.push({ id: uid('file'), name: file.name });
+        const fileId = uid('file');
+        attachments.push({ id: fileId, name: file.name, file: file });
+        
+        // If it's a markdown file, read and display its content
+        if (file.name.toLowerCase().endsWith('.md')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const content = e.target.result;
+            displayMarkdownContent(content, file.name);
+          };
+          reader.readAsText(file);
+        }
       });
       event.target.value = '';
       renderAttachments();
     });
+  }
+
+  // Display markdown content in the conversation
+  function displayMarkdownContent(content, filename) {
+    if (!el.conversation) return;
+    
+    // Hide empty state if visible
+    const emptyState = el.conversation.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.style.display = 'none';
+    }
+
+    // Create a message container for the markdown content
+    const markdownMsg = document.createElement('div');
+    markdownMsg.className = 'msg bot markdown-content';
+    
+    // Add filename header
+    const header = document.createElement('div');
+    header.style.cssText = 'font-weight: 600; margin-bottom: 12px; color: var(--au-navy-dark); border-bottom: 1px solid var(--au-border); padding-bottom: 8px;';
+    header.textContent = `📄 ${filename}`;
+    markdownMsg.appendChild(header);
+    
+    // Parse and render markdown content
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = marked.parse(content);
+    markdownMsg.appendChild(contentDiv);
+    
+    el.conversation.appendChild(markdownMsg);
+    
+    // Scroll to bottom
+    el.conversation.scrollTop = el.conversation.scrollHeight;
   }
 
   function updateSidebarToggle() {
@@ -437,6 +488,125 @@
       updateSidebarToggle();
     });
     updateSidebarToggle();
+  }
+
+  // Chat input handling
+  if (el.chatInput) {
+    // Auto-resize textarea
+    function autoResize() {
+      const textarea = el.chatInput;
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    }
+
+    el.chatInput.addEventListener('input', autoResize);
+
+    // Keyboard handling
+    el.chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        if (e.shiftKey) {
+          // Shift+Enter: Allow line break (default behavior)
+          return;
+        } else {
+          // Enter: Submit message
+          e.preventDefault();
+          const message = el.chatInput.value.trim();
+          if (message) {
+            sendMessage(message);
+            el.chatInput.value = '';
+            autoResize();
+          }
+        }
+      }
+    });
+  }
+
+  // Send message function
+  function sendMessage(message) {
+    if (!el.conversation) return;
+    
+    // Hide empty state if visible
+    const emptyState = el.conversation.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.style.display = 'none';
+    }
+
+    // Add user message
+    const userMsg = document.createElement('div');
+    userMsg.className = 'msg user';
+    userMsg.textContent = message;
+    el.conversation.appendChild(userMsg);
+
+    // Scroll to bottom
+    el.conversation.scrollTop = el.conversation.scrollHeight;
+
+    // Auto-name chat if this is the first message
+    if (state.currentChatId && message.trim()) {
+      generateChatName(message).then(name => {
+        updateChatName(state.currentChatId, name);
+        state.currentChatId = null; // Clear after naming
+      }).catch(err => {
+        console.error('Failed to generate chat name:', err);
+        state.currentChatId = null;
+      });
+    }
+
+    // Add bot response (placeholder for now)
+    const botMsg = document.createElement('div');
+    botMsg.className = 'msg bot';
+    botMsg.innerHTML = marked.parse('I received your message: "' + message + '"');
+    el.conversation.appendChild(botMsg);
+
+    // Scroll to bottom again
+    el.conversation.scrollTop = el.conversation.scrollHeight;
+  }
+
+  // Generate chat name using API
+  async function generateChatName(query) {
+    try {
+      const response = await fetch('api/generate_chat_name.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: query })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate chat name');
+      }
+      
+      const data = await response.json();
+      return data.name;
+    } catch (error) {
+      console.error('Error generating chat name:', error);
+      return 'New Chat';
+    }
+  }
+
+  // Update chat name in the tree
+  function updateChatName(chatId, newName) {
+    const next = clone(state.tree);
+    const chat = findChatById(next, chatId);
+    if (chat) {
+      chat.name = newName;
+      state.tree = next;
+      saveTree();
+      render();
+    }
+  }
+
+  // Find chat by ID in the tree
+  function findChatById(node, id) {
+    if (!node) return null;
+    if (node.id === id && node.type === 'chat') return node;
+    if ((node.type === 'folder' || node.type === 'root') && node.children) {
+      for (const child of node.children) {
+        const found = findChatById(child, id);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   // Initial render
